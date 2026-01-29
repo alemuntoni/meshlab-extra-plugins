@@ -48,9 +48,14 @@ set (MESHLAB_PLUGINS
 	plugins/filter_csg
 	plugins/filter_globalregistration
 	plugins/filter_orientedbbox
-	plugins/filter_poisson
 	plugins/filter_virtualgoniometer
 )
+
+if (NOT APPLE)
+	list(APPEND MESHLAB_PLUGINS
+		plugins/filter_poisson
+	)
+endif()
 
 set (MESHLAB_PLUGIN_EXAMPLES
 	plugin_examples/iomesh_example

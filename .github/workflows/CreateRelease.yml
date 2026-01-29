@@ -20,50 +20,45 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-20.04', 'macos-latest', 'windows-latest']
+        os: ['ubuntu-22.04', 'ubuntu-22.04-arm', 'macos-15-intel', 'macos-latest', 'windows-latest']
         precision: [single_precision, double_precision]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
-    - name: Setup MSVC
-      uses: ilammy/msvc-dev-cmd@v1
-    - name: Set CodeSign Certificate macOS
-      if: runner.os == 'macOS' && env.MAC_CERT != null
-      uses: apple-actions/import-codesign-certs@v2
+    - name: Setup Environment
+      uses: ./meshlab/.github/actions/0_setup
       with:
-        p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
-        p12-password: ${{ secrets.MACOS_CERTIFICATE_PSSW }}
-    - name: Set CodeSign Certificate Windows
-      if: runner.os == 'Windows' && env.WIN_CERT != null
-      run: |
-        New-Item -ItemType directory -Path certificate
-        Set-Content -Path certificate\certificate.txt -Value '${{ secrets.WIN_CERTIFICATE }}'
-        certutil -decode certificate\certificate.txt certificate\certificate.pfx
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        cache: true
-        version: ${{ env.QT_VERSION }}
-    - name: Install dependencies
-      shell: bash
-      run: |
-        bash scripts/${{ runner.os }}/0_setup_env.sh --dont_install_qt --dont_install_cgal_and_boost
+        qt-version: ${{env.QT_VERSION}}
+        use-jurpel-qt-action: ${{matrix.os != 'macos-latest' && matrix.os != 'ubuntu-22.04-arm'}}
     - name: Setup env variables
       id: envs
       shell: bash
       run: |
+        ARCH=$(uname -m)
         if [ "${{matrix.precision}}" == "double_precision" ]; then
-          echo "artifact_suffix=_double" >> $GITHUB_OUTPUT
+          echo "artifact_suffix=_double_$ARCH" >> $GITHUB_OUTPUT
         else
-          echo "artifact_suffix=" >> $GITHUB_OUTPUT
+          echo "artifact_suffix=_$ARCH" >> $GITHUB_OUTPUT
+        fi
+        if [ "${{matrix.os}}" == "macos-latest" ]; then
+          echo "build_options=--use_brew_qt" >> $GITHUB_OUTPUT
+        else
+          echo "build_options=" >> $GITHUB_OUTPUT
         fi
     - name: Configure and Build
       shell: bash
       run: |
-        bash scripts/${{ runner.os }}/1_build.sh --${{ matrix.precision }}
+        bash scripts/${{ runner.os }}/1_build.sh --${{ matrix.precision }} ${{steps.envs.outputs.build_options}}
+    - name: Sign
+      uses: cnr-isti-vclab/sign-and-notarize@v1
+      with:
+        input-path: 'install/meshlab/plugins/*'
+        macos-certificate: '${{ secrets.MACOS_CERTIFICATE }}'
+        macos-certificate-id: '${{ secrets.MACOS_CERT_ID }}'
+        macos-certificate-password: '${{ secrets.MACOS_CERTIFICATE_PSSW }}'
     - name: Upload MeshLab Extra Plugins
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: MeshLab_${{ runner.os }}_extra_plugins${{steps.envs.outputs.artifact_suffix}}
         path: install/meshlab/plugins
@@ -77,70 +72,109 @@ jobs:
     steps:
 
     #Download Linux Packages
-    - name: Download Linux ZIP
-      uses: actions/download-artifact@v3
+    - name: Download Linux ZIP x86_64
+      uses: actions/download-artifact@v4
       with:
-        name: MeshLab_Linux_extra_plugins
-        path: MeshLab_Linux_extra_plugins
-    - name: Download Linux ZIP double
-      uses: actions/download-artifact@v3
+        name: MeshLab_Linux_extra_plugins_x86_64
+        path: MeshLab_Linux_extra_plugins_x86_64
+    - name: Download Linux ZIP double x86_64
+      uses: actions/download-artifact@v4
       with:
-        name: MeshLab_Linux_extra_plugins_double
-        path: MeshLab_Linux_extra_plugins_double
-    - name: Create Linux Archive
+        name: MeshLab_Linux_extra_plugins_double_x86_64
+        path: MeshLab_Linux_extra_plugins_double_x86_64
+    - name: Create Linux x86_64 Archive
       run: |
-        mv MeshLab_Linux_extra_plugins MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux
-        tar -cvzf MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux.tar.gz MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux/
-        mv MeshLab_Linux_extra_plugins_double MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux
-        tar -cvzf MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux.tar.gz MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux/
+        mv MeshLab_Linux_extra_plugins_x86_64 MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux_x86_64
+        tar -cvzf MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux_x86_64.tar.gz MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux_x86_64/
+        mv MeshLab_Linux_extra_plugins_double_x86_64 MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux_x86_64
+        tar -cvzf MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux_x86_64.tar.gz MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux_x86_64/
+
+    - name: Download Linux ZIP aarch64
+      uses: actions/download-artifact@v4
+      with:
+        name: MeshLab_Linux_extra_plugins_aarch64
+        path: MeshLab_Linux_extra_plugins_aarch64
+    - name: Download Linux ZIP double aarch64
+      uses: actions/download-artifact@v4
+      with:
+        name: MeshLab_Linux_extra_plugins_double_aarch64
+        path: MeshLab_Linux_extra_plugins_double_aarch64
+    - name: Create Linux aarch64 Archive
+      run: |
+        mv MeshLab_Linux_extra_plugins_aarch64 MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux_aarch64
+        tar -cvzf MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux_aarch64.tar.gz MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux_aarch64/
+        mv MeshLab_Linux_extra_plugins_double_aarch64 MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux_aarch64
+        tar -cvzf MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux_aarch64.tar.gz MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux_aarch64/
 
     #Download MacOS Packages
-    - name: Download MacOS ZIP
-      uses: actions/download-artifact@v3
+    - name: Download MacOS ZIP x86_64
+      uses: actions/download-artifact@v4
       with:
-        name: MeshLab_macOS_extra_plugins
-        path: MeshLab_macOS_extra_plugins
+        name: MeshLab_macOS_extra_plugins_x86_64
+        path: MeshLab_macOS_extra_plugins_x86_64
     - name: Download MacOS ZIP double
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
-        name: MeshLab_macOS_extra_plugins_double
-        path: MeshLab_macOS_extra_plugins_double
+        name: MeshLab_macOS_extra_plugins_double_x86_64
+        path: MeshLab_macOS_extra_plugins_double_x86_64
     - name: Create MacOS Archive
       run: |
-        mv MeshLab_macOS_extra_plugins MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos
-        zip -r MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos.zip MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos/
-        mv MeshLab_macOS_extra_plugins_double MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos
-        zip -r MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos.zip MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos/
+        mv MeshLab_macOS_extra_plugins_x86_64 MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos_x86_64
+        zip -r MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos_x86_64.zip MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos_x86_64/
+        mv MeshLab_macOS_extra_plugins_double_x86_64 MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos_x86_64
+        zip -r MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos_x86_64.zip MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos_x86_64/
 
-    #Download MacOS Packages
-    - name: Download Windows ZIP
-      uses: actions/download-artifact@v3
+    - name: Download MacOS ZIP arm64
+      uses: actions/download-artifact@v4
       with:
-        name: MeshLab_Windows_extra_plugins
-        path: MeshLab_Windows_extra_plugins
-    - name: Download Windows ZIP double
-      uses: actions/download-artifact@v3
+        name: MeshLab_macOS_extra_plugins_arm64
+        path: MeshLab_macOS_extra_plugins_arm64
+    - name: Download MacOS ZIP double
+      uses: actions/download-artifact@v4
       with:
-        name: MeshLab_Windows_extra_plugins_double
-        path: MeshLab_Windows_extra_plugins_double
+        name: MeshLab_macOS_extra_plugins_double_arm64
+        path: MeshLab_macOS_extra_plugins_double_arm64
     - name: Create MacOS Archive
       run: |
-        mv MeshLab_Windows_extra_plugins MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-windows
-        zip -r MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-windows.zip MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-windows/
-        mv MeshLab_Windows_extra_plugins_double MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-windows
-        zip -r MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-windows.zip MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-windows/
+        mv MeshLab_macOS_extra_plugins_arm64 MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos_arm64
+        zip -r MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos_arm64.zip MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos_arm64/
+        mv MeshLab_macOS_extra_plugins_double_arm64 MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos_arm64
+        zip -r MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos_arm64.zip MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos_arm64/
+
+    #Download Windows Packages
+    - name: Download Windows ZIP x86_64
+      uses: actions/download-artifact@v4
+      with:
+        name: MeshLab_Windows_extra_plugins_x86_64
+        path: MeshLab_Windows_extra_plugins_x86_64
+    - name: Download Windows ZIP double
+      uses: actions/download-artifact@v4
+      with:
+        name: MeshLab_Windows_extra_plugins_double_x86_64
+        path: MeshLab_Windows_extra_plugins_double_x86_64
+    - name: Create Windows Archive
+      run: |
+        mv MeshLab_Windows_extra_plugins_x86_64 MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-windows_x86_64
+        zip -r MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-windows_x86_64.zip MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-windows_x86_64/
+        mv MeshLab_Windows_extra_plugins_double_x86_64 MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-windows_x86_64
+        zip -r MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-windows_x86_64.zip MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-windows_x86_64/
 
     #Create release and upload
     - uses: "ncipollo/release-action@v1"
       with:
         token: "${{ secrets.GITHUB_TOKEN }}"
         tag: "Meshlab-Extra-Plugins-${{ github.event.inputs.version }}"
-        prerelease: false
         name: "Meshlab-Extra-Plugins-${{ github.event.inputs.version }}"
+        body: "Note about the ${{ github.event.inputs.version }}d version: these releases are built with double precision floating point numbers."
+        draft: true
         artifacts: |
-          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux.tar.gz
-          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux.tar.gz
-          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos.zip
-          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos.zip
-          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-windows.zip
-          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-windows.zip
+          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux_x86_64.tar.gz
+          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux_x86_64.tar.gz
+          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-linux_aarch64.tar.gz
+          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-linux_aarch64.tar.gz
+          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos_x86_64.zip
+          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos_x86_64.zip
+          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-macos_arm64.zip
+          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-macos_arm64.zip
+          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}-windows_x86_64.zip
+          MeshLab-Extra-Plugins-${{ github.event.inputs.version }}d-windows_x86_64.zip
