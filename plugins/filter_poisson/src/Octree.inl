@@ -674,7 +674,10 @@ const OctNode<NodeData,Real>* OctNode<NodeData,Real>::getNearestLeaf(const Point
 	Real temp,dist2;
 	if(!children){return this;}
 	for(int i=0;i<Cube::CORNERS;i++){
-		temp=SquareDistance(children[i].center,p);
+		Point3D<Real> center; 
+		Real width;
+		children[i].centerAndWidth(center,width);
+		temp=SquareDistance(center,p);
 		if(!i || temp<dist2){
 			dist2=temp;
 			nearest=i;
@@ -734,7 +737,7 @@ OctNode<NodeData,Real>& OctNode<NodeData,Real>::operator = (const OctNode<NodeDa
 
 	//depth =node.depth();
 	d = node.d;
-	for(i=0;i<DIMENSION;i++){this->offset[i] = node.offset[i];}
+	for(i=0;i<DIMENSION;i++){this->off[i] = node.off[i];}
 	if(node.children){
 		initChildren();
 		for(i=0;i<Cube::CORNERS;i++){children[i] = node.children[i];}
@@ -743,7 +746,7 @@ OctNode<NodeData,Real>& OctNode<NodeData,Real>::operator = (const OctNode<NodeDa
 }
 template <class NodeData,class Real>
 int OctNode<NodeData,Real>::CompareForwardDepths(const void* v1,const void* v2){
-	return ((const OctNode<NodeData,Real>*)v1)->depth-((const OctNode<NodeData,Real>*)v2)->depth;
+	return ((const OctNode<NodeData,Real>*)v1)->depth()-((const OctNode<NodeData,Real>*)v2)->depth();
 }
 template <class NodeData,class Real>
 int OctNode<NodeData,Real>::CompareForwardPointerDepths(const void* v1,const void* v2){
@@ -762,7 +765,7 @@ int OctNode<NodeData,Real>::CompareForwardPointerDepths(const void* v1,const voi
 }
 template <class NodeData,class Real>
 int OctNode<NodeData,Real>::CompareBackwardDepths(const void* v1,const void* v2){
-	return ((const OctNode<NodeData,Real>*)v2)->depth-((const OctNode<NodeData,Real>*)v1)->depth;
+	return ((const OctNode<NodeData,Real>*)v2)->depth()-((const OctNode<NodeData,Real>*)v1)->depth();
 }
 template <class NodeData,class Real>
 int OctNode<NodeData,Real>::CompareBackwardPointerDepths(const void* v1,const void* v2){
