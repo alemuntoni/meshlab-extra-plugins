@@ -34,6 +34,11 @@ jobs:
         else
           echo "artifact_suffix=_$ARCH" >> $GITHUB_OUTPUT
         fi
+        if [ "${{matrix.os}}" == "macos-latest" ]; then
+          echo "build_options=--use_brew_qt" >> $GITHUB_OUTPUT
+        else
+          echo "build_options=" >> $GITHUB_OUTPUT
+        fi
     - name: Ccache
       uses: hendrikmuhs/ccache-action@v1.2
       with:
@@ -41,7 +46,7 @@ jobs:
     - name: Configure and Build
       shell: bash
       run: |
-        bash scripts/${{ runner.os }}/1_build.sh --${{ matrix.precision }} --nightly --ccache
+        bash scripts/${{ runner.os }}/1_build.sh --${{ matrix.precision }} --nightly --ccache ${{steps.envs.outputs.build_options}}
     - name: Upload MeshLab Extra Plugins
       uses: actions/upload-artifact@v4
       with:
